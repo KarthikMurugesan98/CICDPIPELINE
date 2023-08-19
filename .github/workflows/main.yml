@@ -21,36 +21,49 @@ jobs:
 
       - name: Install UiPath CLI
         run: |
-          $cliUrl = "https://www.myget.org/F/uipath-dev/api/v2/package/UiPath.CLI/1.0.7985.19721"
-          $cliZipPath = "$env:USERPROFILE\Downloads\uipathcli.zip"
-          $cliFolderPath = "$env:USERPROFILE\Downloads\uipathcli"
+          # Install necessary tools if needed
+          # Example: choco install uipath -y
 
-          Invoke-WebRequest -Uri $cliUrl -OutFile $cliZipPath
-          Expand-Archive -Path $cliZipPath -DestinationPath $cliFolderPath
-          $cliExePath = Join-Path $cliFolderPath "uipcli.exe"
-          echo "UIPath CLI installed at $cliExePath"
-
-
-      - name: Publish UiPath Package
+      - name: Authenticate to Orchestrator
+        id: authenticate
         run: |
-          # Pack the UiPath project to create .nupkg package
-          # e.g., nuget pack MyProject.nuspec -OutputDirectory $env:GITHUB_WORKSPACE
+          $authHeaders = @{
+            'Content-Type' = 'application/json'
+          }
+          $authBody = @{
+            'grant_type'    = 'refresh_token'
+            'client_id'     = $env:ORCHESTRATOR_APP_ID
+            'refresh_token' = $env:ORCHESTRATOR_APP_SECRET
+          }
+          $authResponse = Invoke-RestMethod -Uri "$env:ORCHESTRATOR_URL/identity_/connect/token" -Headers $authHeaders -Method Post -Body ($authBody | ConvertTo-Json)
+          echo "::set-output name=accessToken::$($authResponse.access_token)"
 
-          # Deploy the package to Orchestrator using the downloaded uipcli.exe
-          $args = @(
-            "package",
-            "deploy",
-            "$env:GITHUB_WORKSPACE\free.nupkg",  # Update with your package path
-            "--url",
-            $env:ORCHESTRATOR_URL,
-            "--tenant",
-            $env:ORCHESTRATOR_TENANT,
-            "--accountForApp",
-            $env:ORCHESTRATOR_APP_ID,
-            "--applicationSecret",
-            $env:ORCHESTRATOR_APP_SECRET,
-            "--organizationUnit",
-            $env:ORCHESTRATOR_FOLDER
-          )
-          Start-Process -FilePath "uipathcli/lib/net461/uipcli.exe" -ArgumentList $args -Wait
+      - name: Get Latest Package Version
+        id: get_latest_version
+        run: |
+          $accessToken = ${{ steps.authenticate.outputs.accessToken }}
+          $latestPackage = Invoke-RestMethod -Uri "$env:ORCHESTRATOR_URL/odata/Packages?\$top=1&\$orderby=Version desc" -Headers @{ 'Authorization' = "Bearer $accessToken" } -Method Get
+          $newPackageVersion = $latestPackage.value[0].Version + 1
+          echo "::set-output name=newPackageVersion::$newPackageVersion"
 
+      - name: Deploy Package to Orchestrator
+        run: |
+          $accessToken = ${{ steps.authenticate.outputs.accessToken }}
+          $packagePath = "$env:GITHUB_WORKSPACE\free.nupkg"  # Update with your package path
+          $packageHeaders = @{
+            'Authorization' = "Bearer $accessToken"
+          }
+          $uploadResponse = Invoke-RestMethod -Uri "$env:ORCHESTRATOR_URL/odata/RobotFeeds/UiPath.Server.Configuration.OData.UploadPackages" -Headers $packageHeaders -Method Post -InFile $packagePath
+          $packageId = $uploadResponse.Id
+
+          $deployHeaders = @{
+            'Authorization'          = "Bearer $accessToken"
+            'X-UIPATH-OrganizationUnitId' = $env:ORCHESTRATOR_FOLDER
+            'X-UIPATH-PackageId'      = $packageId
+            'Content-Type'           = 'application/json'
+          }
+          $deployBody = @{
+            'EnvironmentId' = $env:ORCHESTRATOR_ENVIRONMENT_ID
+            'Name'          = "DeploymentName"
+          }
+          $deploymentResponse = Invoke-RestMethod -Uri "$env:ORCHESTRATOR_URL/odata/Releases/UiPath.Server.Configuration.OData.Deploy" -Headers $deployHeaders -Method Post -Body ($deployBody | ConvertTo-Json)
