@@ -1,0 +1,56 @@
+name: Deploy to UiPath Orchestrator
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  ORCHESTRATOR_URL: ${{ secrets.ORCHESTRATOR_URL }}
+  ORCHESTRATOR_TENANT: ${{ secrets.ORCHESTRATOR_TENANT }}
+  ORCHESTRATOR_FOLDER: ${{ secrets.ORCHESTRATOR_FOLDER }}
+  ORCHESTRATOR_APP_ID: ${{ secrets.ORCHESTRATOR_APP_ID }}
+  ORCHESTRATOR_APP_SECRET: ${{ secrets.ORCHESTRATOR_APP_SECRET }}
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3.5.3
+
+      - name: Install UiPath CLI
+        run: |
+          $cliUrl = "https://www.myget.org/F/uipath-dev/api/v2/package/UiPath.CLI/1.0.7985.19721"
+          $cliZipPath = "$env:USERPROFILE\Downloads\uipathcli.zip"
+          $cliFolderPath = "$env:USERPROFILE\Downloads\uipathcli"
+
+          Invoke-WebRequest -Uri $cliUrl -OutFile $cliZipPath
+          Expand-Archive -Path $cliZipPath -DestinationPath $cliFolderPath
+          $cliExePath = Join-Path $cliFolderPath "uipcli.exe"
+          echo "UIPath CLI installed at $cliExePath"
+
+
+      - name: Publish UiPath Package
+        run: |
+          # Pack the UiPath project to create .nupkg package
+          # e.g., nuget pack MyProject.nuspec -OutputDirectory $env:GITHUB_WORKSPACE
+
+          # Deploy the package to Orchestrator using the downloaded uipcli.exe
+          $args = @(
+            "package",
+            "deploy",
+            "$env:GITHUB_WORKSPACE\free.nupkg",  # Update with your package path
+            "--url",
+            $env:ORCHESTRATOR_URL,
+            "--tenant",
+            $env:ORCHESTRATOR_TENANT,
+            "--accountForApp",
+            $env:ORCHESTRATOR_APP_ID,
+            "--applicationSecret",
+            $env:ORCHESTRATOR_APP_SECRET,
+            "--organizationUnit",
+            $env:ORCHESTRATOR_FOLDER
+          )
+          Start-Process -FilePath ".github/workflows/uipcli.exe" -ArgumentList $args -Wait
+
