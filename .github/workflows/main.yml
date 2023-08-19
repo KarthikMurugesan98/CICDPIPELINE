@@ -52,5 +52,5 @@ jobs:
             "--organizationUnit",
             $env:ORCHESTRATOR_FOLDER
           )
-          Start-Process -FilePath ".github/workflows/uipcli.exe" -ArgumentList $args -Wait
+          Start-Process -FilePath "uipathcli/lib/net461/uipcli.exe" -ArgumentList $args -Wait
 
