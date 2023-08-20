@@ -1,0 +1,40 @@
+name: Deploy to UiPath Orchestrator
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: windows-latest
+    steps:
+      - name: Set up PowerShell environment
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $env:ORCHESTRATOR_APP_ID = "${{ secrets.ORCHESTRATOR_APP_ID }}"
+          $env:ORCHESTRATOR_APP_SECRET = "${{ secrets.ORCHESTRATOR_APP_SECRET }}"
+          $env:ORCHESTRATOR_URL = "https://cloud.uipath.com/karthiktecnology/DefaultTenant"
+          
+      - name: Authenticate to Orchestrator
+        shell: pwsh
+        run: |
+          $authHeaders = @{
+              'Content-Type' = 'application/x-www-form-urlencoded'
+          }
+          $authBody = @{
+              'grant_type'    = 'refresh_token'
+              'client_id'     = $env:ORCHESTRATOR_APP_ID
+              'refresh_token' = $env:ORCHESTRATOR_APP_SECRET
+          }
+          
+          $encodedAuthBody = $authBody | ForEach-Object { "$($_.Key)=$($_.Value)" } -join '&'
+          
+          $authResponse = Invoke-RestMethod -Uri "$env:ORCHESTRATOR_URL/identity/connect/token" -Method Post -Headers $authHeaders -Body $encodedAuthBody
+          
+          if ($authResponse.access_token) {
+              Write-Output "::set-output name=accessToken::$($authResponse.access_token)"
+          } else {
+              throw "Authentication failed. Check your credentials and endpoint URL."
+          }
