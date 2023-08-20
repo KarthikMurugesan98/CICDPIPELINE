@@ -21,7 +21,8 @@ jobs:
 
       - name: Authenticate to Orchestrator
         id: authenticate
-        run: pwsh|authenticate.ps1
+        shell: pwsh
+        run: authenticate.ps1
           $authHeaders = @{
             'Content-Type' = 'application/json'
           }
