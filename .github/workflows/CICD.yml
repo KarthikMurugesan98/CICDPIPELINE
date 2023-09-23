@@ -1,0 +1,39 @@
+name: Deploy to UiPath Orchestrator
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3.5.3
+        
+      - name: Set up UiPath Environment
+        uses: n4te/setup-uipath@v1
+        with:
+          orchestrator_url: ${{ secrets.ORCHESTRATOR_URL }}
+          orchestrator_tenant: ${{ secrets.ORCHESTRATOR_TENANT }}
+          orchestrator_app_id: ${{ secrets.ORCHESTRATOR_APP_ID }}
+          orchestrator_app_secret: ${{ secrets.ORCHESTRATOR_APP_SECRET }}
+          folder_name: "shared" # Update to your desired folder name
+          machine_name: "KARTHIK" # Update to your machine name
+
+      - name: Publish UiPath Package
+        run: |
+          # Build or Publish your UiPath project to create a .nupkg package.
+          # Example: Publish to a specific directory
+          # UiRobot.exe -file "path\to\project.json" --publish "path\to\output.nupkg"
+          # Make sure to replace the paths with your actual project path and output path.
+          
+          # Deploy the package to Orchestrator
+          UiRobot.exe -file "path\to\output.nupkg" --platformSettings "{\"OrchestratorServerName\":\"$ORCHESTRATOR_URL\",\"TenantName\":\"$ORCHESTRATOR_TENANT\",\"Username\":\"$ORCHESTRATOR_APP_ID\",\"Password\":\"$ORCHESTRATOR_APP_SECRET\"}"
+
+        env:
+          ORCHESTRATOR_URL: ${{ secrets.ORCHESTRATOR_URL }}
+          ORCHESTRATOR_TENANT: ${{ secrets.ORCHESTRATOR_TENANT }}
+          ORCHESTRATOR_APP_ID: ${{ secrets.ORCHESTRATOR_APP_ID }}
+          ORCHESTRATOR_APP_SECRET: ${{ secrets.ORCHESTRATOR_APP_SECRET }}
